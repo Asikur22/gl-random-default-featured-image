@@ -26,7 +26,7 @@ if ( ! class_exists( 'GL_RDFI' ) ) {
             add_action( 'admin_init', [ $this, 'handle_form_submission' ] );
             
             add_filter( 'get_post_metadata', array( $this, 'set_cache_meta_key' ), 10, 3 );
-//            add_filter( 'post_thumbnail_id', [ $this, 'filter_post_thumbnail_id' ], 20, 2 );
+            add_filter( 'post_thumbnail_id', [ $this, 'filter_post_thumbnail_id' ], 20, 2 );
             
             add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), [ $this, 'add_settings_link' ] );
         }
@@ -50,6 +50,7 @@ if ( ! class_exists( 'GL_RDFI' ) ) {
         
         public function render_settings_page() {
             $saved_ids = get_option( $this->option_name, [] );
+            $saved_post_types = get_option( 'rdfi_post_types', [] );
             ?>
 			<div class="wrap">
 				<h1>Random Default Featured Image By <a href="https://www.asique.net/?ref=rdfi" target="_blank">Asiqur Rahman</a></h1>
@@ -65,6 +66,18 @@ if ( ! class_exists( 'GL_RDFI' ) ) {
                         }
                         ?>
 					</div>
+
+					<h2>Select Post Types</h2>
+					<p>Select the post types where the random default featured image should be applied:</p>
+                    <?php
+                    $post_types = get_post_types( [ 'public' => true ], 'objects' );
+					unset( $post_types['attachment'] );
+                    foreach ( $post_types as $post_type ) {
+                        $checked = in_array( $post_type->name, $saved_post_types ) ? 'checked' : '';
+                        echo "<label><input type='checkbox' name='rdfi_post_types[]' value='{$post_type->name}' {$checked}> {$post_type->label}</label><br>";
+                    }
+                    ?>
+
 					<p><input type="submit" name="rdfi_submit" class="button button-primary" value="Save"></p>
 				</form>
 			</div>
@@ -77,6 +90,9 @@ if ( ! class_exists( 'GL_RDFI' ) ) {
                 if ( is_array( $media_ids ) ) {
                     update_option( $this->option_name, array_map( 'intval', $media_ids ) );
                 }
+
+                $post_types = $_POST['rdfi_post_types'] ?? [];
+                update_option( 'rdfi_post_types', array_map( 'sanitize_text_field', $post_types ) );
             }
         }
         
@@ -92,6 +108,11 @@ if ( ! class_exists( 'GL_RDFI' ) ) {
             }
             
             $post_type = get_post_type( $object_id );
+            $saved_post_types = get_option( 'rdfi_post_types', [] );
+            if ( ! in_array( $post_type, $saved_post_types ) ) {
+                return $_null;
+            }
+            
             // Check if this post type supports featured images.
             if ( false !== $post_type && ! post_type_supports( $post_type, 'thumbnail' ) ) {
                 return $_null; // post type does not support featured images.
@@ -136,6 +157,12 @@ if ( ! class_exists( 'GL_RDFI' ) ) {
             if ( $thumbnail_id ) {
                 return $thumbnail_id;
             }
+			
+			$post_type = get_post_type( $post->ID );
+			$saved_post_types = get_option( 'rdfi_post_types', [] );
+			if ( ! in_array( $post_type, $saved_post_types ) ) {
+				return $thumbnail_id;
+			}
             
             $ids = get_option( $this->option_name, [] );
             if ( empty( $ids ) ) {
